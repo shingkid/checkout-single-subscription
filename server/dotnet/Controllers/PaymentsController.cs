@@ -34,13 +34,6 @@ namespace server.Controllers
         [HttpPost("create-checkout-session")]
         public async Task<IActionResult> CreateCheckoutSession([FromBody] CreateCheckoutSessionRequest req)
         {
-            // This ID is typically stored with the authenticated user in your database. For
-            // demonstration purposes, we're pulling this value from environment variables.
-            //
-            // Note this is not required to create a Subscription, but demonstrates how you would
-            // create a new Subscription using Stripe Checkout with an existing user.
-            var stripeCustomerId = this.options.Value.Customer;
-
             var options = new SessionCreateOptions
             {
                 SuccessUrl = $"{this.options.Value.Domain}/success.html?session_id={{CHECKOUT_SESSION_ID}}",
@@ -58,7 +51,6 @@ namespace server.Controllers
                         Quantity = 1,
                     },
                 },
-                Customer = stripeCustomerId,
             };
             var service = new SessionService(this.client);
             try
@@ -91,12 +83,13 @@ namespace server.Controllers
         }
 
         [HttpPost("customer-portal")]
-        public async Task<IActionResult> CustomerPortal()
+        public async Task<IActionResult> CustomerPortal([FromBody] CustomerPortalRequest req)
         {
-            // This ID is typically stored with the authenticated
-            // user in your database. For demonstration purposes, we're
-            // pulling this value from environment variables.
-            var stripeCustomerId = this.options.Value.Customer;
+            // For demonstration purposes, we're using the Checkout session to retrieve the customer ID. 
+            // Typically this is stored alongside the authenticated user in your database.
+            var checkoutSessionId = req.SessionId;
+            var checkoutService = new SessionService(this.client);
+            var checkoutSession = await checkoutService.GetAsync(checkoutSessionId);
 
             // This is the URL to which your customer will return after
             // they are done managing billing in the Customer Portal.
@@ -104,13 +97,13 @@ namespace server.Controllers
 
             var options = new Stripe.BillingPortal.SessionCreateOptions
             {
-                Customer = stripeCustomerId,
+                Customer = checkoutSession.CustomerId,
                 ReturnUrl = returnUrl,
             };
             var service = new Stripe.BillingPortal.SessionService(this.client);
             var session = await service.CreateAsync(options);
 
-            return Redirect(session.Url);
+            return Ok(session);
         }
 
         [HttpPost("webhook")]
